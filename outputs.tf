@@ -1,5 +1,4 @@
-##############################################################################
-# Outputs File
+############################################################################### Outputs File
 #
 # Expose the outputs you want your users to see after a successful 
 # `terraform apply` or `terraform output` command. You can add your own text 
@@ -11,9 +10,9 @@ output "_instructions" {
 }
 
 output "public_dns" {
-  value = "${azurerm_public_ip.tf-guide-pip.fqdn}"
+  value = "${azurerm_public_ip.db-demo-pip.fqdn}"
 }
 
 output "App_Server_URL" {
-  value = "http://${azurerm_public_ip.tf-guide-pip.fqdn}"
+  value = "http://${azurerm_public_ip.db-demo-pip.fqdn}"
 }

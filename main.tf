@@ -5,7 +5,7 @@
 #
 # Resource group with a virtual network and subnet
 # An Ubuntu Linux server running Apache
-
+ 
 ##############################################################################
 # * Shared infrastructure resources
 
@@ -19,7 +19,7 @@ provider "azurerm" {
 # resource group. Think of it as a container to hold all your resources. 
 # You can find a complete list of Azure resources supported by Terraform here:
 # https://www.terraform.io/docs/providers/azurerm/
-resource "azurerm_resource_group" "tf_azure_guide" {
+resource "azurerm_resource_group" "db_azure_guide" {
   name     = "${var.resource_group}"
   location = "${var.location}"
 }
@@ -32,9 +32,9 @@ resource "azurerm_resource_group" "tf_azure_guide" {
 # GraphViz tool: http://www.webgraphviz.com/
 resource "azurerm_virtual_network" "vnet" {
   name                = "${var.virtual_network_name}"
-  location            = "${azurerm_resource_group.tf_azure_guide.location}"
+  location            = "${azurerm_resource_group.db_azure_guide.location}"
   address_space       = ["${var.address_space}"]
-  resource_group_name = "${azurerm_resource_group.tf_azure_guide.name}"
+  resource_group_name = "${azurerm_resource_group.db_azure_guide.name}"
 }
 
 # Next we'll build a subnet to run our VMs in. These variables can be defined 
@@ -45,7 +45,7 @@ resource "azurerm_virtual_network" "vnet" {
 resource "azurerm_subnet" "subnet" {
   name                 = "${var.prefix}subnet"
   virtual_network_name = "${azurerm_virtual_network.vnet.name}"
-  resource_group_name  = "${azurerm_resource_group.tf_azure_guide.name}"
+  resource_group_name  = "${azurerm_resource_group.db_azure_guide.name}"
   address_prefix       = "${var.subnet_prefix}"
 }
 
@@ -59,10 +59,10 @@ resource "azurerm_subnet" "subnet" {
 # automatically, and each resource is named with user-defined variables.
 
 # Security group to allow inbound access on port 80 (http) and 22 (ssh)
-resource "azurerm_network_security_group" "tf-guide-sg" {
+resource "azurerm_network_security_group" "db-demo-sg" {
   name                = "${var.prefix}-sg"
   location            = "${var.location}"
-  resource_group_name = "${azurerm_resource_group.tf_azure_guide.name}"
+  resource_group_name = "${azurerm_resource_group.db_azure_guide.name}"
 
   security_rule {
     name                       = "HTTP"
@@ -87,31 +87,44 @@ resource "azurerm_network_security_group" "tf-guide-sg" {
     source_address_prefix      = "${var.source_network}"
     destination_address_prefix = "*"
   }
+
+  security_rule {
+    name                       = "REDIs"
+    priority                   = 102
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "6379"
+    source_address_prefix      = "${var.source_network}"
+    destination_address_prefix = "*"
+  }
+
 }
 
 # A network interface. This is required by the azurerm_virtual_machine 
 # resource. Terraform will let you know if you're missing a dependency.
-resource "azurerm_network_interface" "tf-guide-nic" {
-  name                      = "${var.prefix}tf-guide-nic"
+resource "azurerm_network_interface" "db-demo-nic" {
+  name                      = "${var.prefix}db-demo-nic"
   location                  = "${var.location}"
-  resource_group_name       = "${azurerm_resource_group.tf_azure_guide.name}"
-  network_security_group_id = "${azurerm_network_security_group.tf-guide-sg.id}"
+  resource_group_name       = "${azurerm_resource_group.db_azure_guide.name}"
+  network_security_group_id = "${azurerm_network_security_group.db-demo-sg.id}"
 
   ip_configuration {
     name                          = "${var.prefix}ipconfig"
     subnet_id                     = "${azurerm_subnet.subnet.id}"
     private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = "${azurerm_public_ip.tf-guide-pip.id}"
+    public_ip_address_id          = "${azurerm_public_ip.db-demo-pip.id}"
   }
 }
 
 # Every Azure Virtual Machine comes with a private IP address. You can also 
 # optionally add a public IP address for Internet-facing applications and 
 # demo environments like this one.
-resource "azurerm_public_ip" "tf-guide-pip" {
+resource "azurerm_public_ip" "db-demo-pip" {
   name                         = "${var.prefix}-ip"
   location                     = "${var.location}"
-  resource_group_name          = "${azurerm_resource_group.tf_azure_guide.name}"
+  resource_group_name          = "${azurerm_resource_group.db_azure_guide.name}"
   public_ip_address_allocation = "Dynamic"
   domain_name_label            = "${var.hostname}"
 }
@@ -123,10 +136,10 @@ resource "azurerm_public_ip" "tf-guide-pip" {
 resource "azurerm_virtual_machine" "site" {
   name                = "${var.hostname}-site"
   location            = "${var.location}"
-  resource_group_name = "${azurerm_resource_group.tf_azure_guide.name}"
+  resource_group_name = "${azurerm_resource_group.db_azure_guide.name}"
   vm_size             = "${var.vm_size}"
 
-  network_interface_ids         = ["${azurerm_network_interface.tf-guide-nic.id}"]
+  network_interface_ids         = ["${azurerm_network_interface.db-demo-nic.id}"]
   delete_os_disk_on_termination = "true"
 
   storage_image_reference {
@@ -162,7 +175,7 @@ resource "azurerm_virtual_machine" "site" {
       type     = "ssh"
       user     = "${var.admin_username}"
       password = "${var.admin_password}"
-      host     = "${azurerm_public_ip.tf-guide-pip.fqdn}"
+      host     = "${azurerm_public_ip.db-demo-pip.fqdn}"
     }
   }
 
@@ -177,7 +190,7 @@ resource "azurerm_virtual_machine" "site" {
       type     = "ssh"
       user     = "${var.admin_username}"
       password = "${var.admin_password}"
-      host     = "${azurerm_public_ip.tf-guide-pip.fqdn}"
+      host     = "${azurerm_public_ip.db-demo-pip.fqdn}"
     }
   }
 }
@@ -194,8 +207,8 @@ resource "azurerm_virtual_machine" "site" {
 
 # resource "azurerm_mysql_server" "mysql" {
 #   name                = "${var.mysql_hostname}"
-#   location            = "${azurerm_resource_group.tf_azure_guide.location}"
-#   resource_group_name = "${azurerm_resource_group.tf_azure_guide.name}"
+#   location            = "${azurerm_resource_group.db_azure_guide.location}"
+#   resource_group_name = "${azurerm_resource_group.db_azure_guide.name}"
 #   ssl_enforcement     = "Disabled"
 
 #   sku {
@@ -218,7 +231,7 @@ resource "azurerm_virtual_machine" "site" {
 # # documentation, and it will build infrastructure correctly every time.
 # resource "azurerm_mysql_database" "employees" {
 #   name                = "employees"
-#   resource_group_name = "${azurerm_resource_group.tf_azure_guide.name}"
+#   resource_group_name = "${azurerm_resource_group.db_azure_guide.name}"
 #   server_name         = "${azurerm_mysql_server.mysql.name}"
 #   charset             = "utf8"
 #   collation           = "utf8_unicode_ci"
@@ -227,8 +240,8 @@ resource "azurerm_virtual_machine" "site" {
 # # This firewall rule allows database connections from anywhere and is suited
 # # for demo environments. Don't do this in production. 
 # resource "azurerm_mysql_firewall_rule" "demo" {
-#   name                = "tf-guide-demo"
-#   resource_group_name = "${azurerm_resource_group.tf_azure_guide.name}"
+#   name                = "db-demo-demo"
+#   resource_group_name = "${azurerm_resource_group.db_azure_guide.name}"
 #   server_name         = "${azurerm_mysql_server.mysql.name}"
 #   start_ip_address    = "0.0.0.0"
 #   end_ip_address      = "0.0.0.0"
